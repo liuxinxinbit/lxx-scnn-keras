@@ -15,28 +15,6 @@ from tensorflow import keras, optimizers
 from tensorflow.python.ops.image_ops_impl import ResizeMethod
 import Tusimple
 from sklearn.preprocessing import StandardScaler
-class My_loss(keras.losses.Loss):
-    def __init__(self):
-        super().__init__()
-        self.bce = keras.losses.BinaryCrossentropy()
-        self.ce = keras.losses.CategoricalCrossentropy()
-    def call(self, y_true, y_pred):
-            # Compute the segmentation loss
-            # decode_logits_reshape = K.reshape(
-            #     decode_logits,
-            #     shape=[decode_logits.get_shape().as_list()[0],
-            #            decode_logits.get_shape().as_list()[1] * decode_logits.get_shape().as_list()[2],
-            #            decode_logits.get_shape().as_list()[3]])
-            # binary_label_reshape = K.reshape(
-            #     binary_label,
-            #     shape=[binary_label.get_shape().as_list()[0],
-            #            binary_label.get_shape().as_list()[1] * binary_label.get_shape().as_list()[2]])
-        prob_output_loss = self.bce(y_true,y_pred)
-        prob_output_loss = tf.reduce_mean(prob_output_loss)
-        # existence_loss = self.bce(y_true,y_pred)
-        # existence_loss = tf.reduce_mean(existence_loss)
-        # total_loss = prob_output_loss + 0.1 * existence_loss
-        return prob_output_loss
 
 
 class SCNN:
@@ -54,9 +32,12 @@ class SCNN:
     def my_loss_error(self, y_true, y_pred):
         self.bce = keras.losses.BinaryCrossentropy()
         # self.ce = keras.losses.categorical_crossentropy()
-        prob_output_loss = keras.losses.categorical_crossentropy(y_true,y_pred)
-        # prob_output_loss = tf.reduce_mean(prob_output_loss)
-        return prob_output_loss
+        prob_output_loss = keras.losses.categorical_crossentropy(y_true[0],y_pred[0])
+        prob_output_loss = tf.reduce_mean(prob_output_loss)
+        existence_loss = self.bce(y_true[1],y_pred[1])
+        existence_loss = tf.reduce_mean(existence_loss)
+        total_loss = prob_output_loss + 0.0 * existence_loss
+        return total_loss
     def predict(self, image):
         return self.model.predict(np.array([image]))
     
@@ -179,14 +160,14 @@ class SCNN:
         conv_4 = self.build_conv2D_block(conv_4, filters=128, kernel_size=3, strides=1)
         conv_4 = self.build_conv2D_block(conv_4, filters=128, kernel_size=3, strides=1)
         # fifth conv layer
-        conv_5 = self.build_conv2D_block(conv_4, filters=256, kernel_size=3, strides=2, dilation_rate=1)
+        conv_5 = self.build_conv2D_block(conv_4, filters=256, kernel_size=3, strides=1, dilation_rate=1)
         conv_5 = self.build_conv2D_block(conv_5, filters=256, kernel_size=3, strides=1, dilation_rate=1)
 
         conv_5 = self.build_conv2D_block(conv_5, filters=256, kernel_size=3, strides=1, dilation_rate=1)
         conv_5 = self.build_conv2D_block(conv_5, filters=256, kernel_size=3, strides=1, dilation_rate=1)
         conv_5 = self.build_conv2D_block(conv_5, filters=256, kernel_size=3, strides=1, dilation_rate=1)
         # added part of SCNN #
-        conv_6_4 = self.build_conv2D_block(conv_4, filters=256, kernel_size=3, strides=1, dilation_rate=1)
+        conv_6_4 = self.build_conv2D_block(conv_5, filters=256, kernel_size=3, strides=1, dilation_rate=1)
         conv_6_5 = self.build_conv2D_block(conv_6_4, filters=128, kernel_size=1, strides=1)  # 8 x 36 x 100 x 128
 
         scnn_part = self.space_cnn_part(conv_6_5)
@@ -194,10 +175,10 @@ class SCNN:
 
 
         #######################
-        conv2d_deconv5_1 = self.build_conv2D_block(conv_5,filters = 196,kernel_size=3,strides=1)
-        conv2d_deconv4   = self.build_conv2Dtranspose_block(conv2d_deconv5_1, filters=128, kernel_size=4, strides=2)
+        # conv2d_deconv5_1 = self.build_conv2D_block(conv_5,filters = 196,kernel_size=3,strides=1)
+        # conv2d_deconv4   = self.build_conv2Dtranspose_block(conv2d_deconv5_1, filters=128, kernel_size=4, strides=2)
 
-        Concat_concat4 = concatenate([scnn_part,conv2d_deconv4, conv_4], axis=-1)
+        Concat_concat4 = concatenate([scnn_part, conv_4], axis=-1)
 
         conv2d_deconv4_1 = self.build_conv2D_block(Concat_concat4,filters = 96,kernel_size=3,strides=1)
         conv2d_deconv3   = self.build_conv2Dtranspose_block(conv2d_deconv4_1, filters=96, kernel_size=4, strides=2)
@@ -224,16 +205,16 @@ class SCNN:
 
         ### add lane existence prediction branch ###
         # spatial softmax #
-        features = ret_prob_output  # N x H x W x C
-        softmax = Activation('softmax')(features)
-        avg_pool = AvgPool2D(strides=2)(softmax)
-        _, H, W, C = avg_pool.get_shape().as_list()
-        reshape_output = tf.reshape(avg_pool, [-1, H * W * C])
+        # features = ret_prob_output  # N x H x W x C
+        # softmax = Activation('softmax')(features)
+        # avg_pool = AvgPool2D(strides=2)(softmax)
+        features = self.build_conv2D_block(ret_prob_output,filters = num_classes,kernel_size=1,strides=2)
+        _, H, W, C = features.get_shape().as_list()
+        reshape_output = tf.reshape(features, [-1, H * W * C])
         fc_output = Dense(128)(reshape_output)
-        relu_output = ReLU(max_value=6)(fc_output)
-        existence_output = Dense(4,name='ctg_out_2')(relu_output)
-
-        # ret = {'prob_output':ret_prob_output,'existence_output':existence_output}
+        relu_output = Activation('relu')(fc_output)
+        existence_output = Dense(4)(relu_output)
+        existence_output = Activation('softmax',name='ctg_out_2')(existence_output)
         self.model = Model(inputs=input_tensor, outputs=[ret_prob_output,existence_output])
         # print(self.model.summary())
         adam = optimizers.Adam(lr=0.001)
@@ -242,13 +223,15 @@ class SCNN:
         if num_classes==1:
             self.model.compile(optimizer=sgd, loss="binary_crossentropy", metrics=['accuracy'])
         else:
-            self.model.compile(optimizer=sgd,   loss={
-         'ctg_out_1': 'categorical_crossentropy',
-         'ctg_out_2': 'binary_crossentropy'},
-       loss_weights={
-         'ctg_out_1': 1.,
-         'ctg_out_2': 0.2,
-       }, metrics=['accuracy', 'mse'])
+            self.model.compile(optimizer=sgd, loss=self.my_loss_error, metrics=['accuracy'])
+            
+    #         self.model.compile(optimizer=sgd,   loss={
+    #      'ctg_out_1': 'categorical_crossentropy',
+    #      'ctg_out_2': 'binary_crossentropy'},
+    #    loss_weights={
+    #      'ctg_out_1': 1.,
+    #      'ctg_out_2': 0.2,
+    #    }, metrics=['accuracy', 'mse'])
 
         
     def build_origin(self, print_summary=False, num_classes=5,image_size=(352, 640, 3)):

@@ -34,9 +34,9 @@ for flag in range(1):
     plt.imshow(image)
     prediction = scnn.predict(image)[0]
     print(prediction.shape)
-    result = np.argmax(prediction,-1)
+    result = np.argmax(prediction[0,:,:,:],-1)
     plt.subplot(1, 2, 2)
-    plt.imshow(prediction[0,:,:,0])
+    plt.imshow(result)
     plt.pause(0.5)
     # plt.clf()
     plt.show()

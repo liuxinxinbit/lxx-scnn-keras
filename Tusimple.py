@@ -1,4 +1,3 @@
-from numpy.core.defchararray import array
 from DataArgument import data_augment
 import json
 import os
@@ -9,8 +8,7 @@ import numpy as np
 from tensorflow.python.ops.image_ops_impl import ResizeMethod
 import tensorflow as tf
 from sklearn.preprocessing import StandardScaler
-from torchvision.transforms import Normalize as Normalize_th
-
+from keras.utils import to_categorical
 class Tusimple():
     """
     image_set is splitted into three partitions: train, val, test.
@@ -62,7 +60,7 @@ class Tusimple():
                 image = cv2.imread(self.img_list[index+j])
                 truth_mask = cv2.imread(
                     self.segLabel_list[index+j], cv2.IMREAD_GRAYSCALE)+1
-                image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)/255
+                image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
                 # image = self.scaler.fit_transform(image.astype(
                 #     np.float32).reshape(-1, 1)).reshape(-1, image.shape[0], image.shape[1], image.shape[2])
                 image = tf.image.resize(image, [352, 640],method=ResizeMethod.BICUBIC).numpy()
@@ -75,9 +73,10 @@ class Tusimple():
                 truths_set.append((np.arange(labels) == truth_mask[...,None]-1).astype(int))
 
                 exist_list = np.array(self.exist_list[index+j])
-
                 exist_list_set.append(exist_list)
-            yield np.array(images), [np.array(truths_set),np.array(exist_list_set)]
+            images,truths_set,exist_list_set = np.array(images)/255, np.array(truths_set),np.array(exist_list_set)
+            # self.show_img(images[0,:,:,:],np.argmax(truths_set[0,:,:,:],-1))
+            yield images, [truths_set,exist_list_set]
 
     def __len__(self):
         return len(self.img_list)
@@ -185,26 +184,12 @@ class Tusimple():
 
         list_f.close()
 
-    # @staticmethod
-    # def collate(batch):
-    #     if isinstance(batch[0]['img'], torch.Tensor):
-    #         img = torch.stack([b['img'] for b in batch])
-    #     else:
-    #         img = [b['img'] for b in batch]
+    def show_img(sefl,img,truth):
+        plt.subplot(1, 2, 1)
+        plt.imshow(img)
+        plt.subplot(1, 2, 2)
+        plt.imshow(truth)
+        # plt.pause(0.5)
+        # plt.clf()
+        plt.show()
 
-    #     if batch[0]['segLabel'] is None:
-    #         segLabel = None
-    #         exist = None
-    #     elif isinstance(batch[0]['segLabel'], torch.Tensor):
-    #         segLabel = torch.stack([b['segLabel'] for b in batch])
-    #         exist = torch.stack([b['exist'] for b in batch])
-    #     else:
-    #         segLabel = [b['segLabel'] for b in batch]
-    #         exist = [b['exist'] for b in batch]
-
-    #     samples = {'img': img,
-    #                'segLabel': segLabel,
-    #                'exist': exist,
-    #                'img_name': [x['img_name'] for x in batch]}
-
-    #     return samples
