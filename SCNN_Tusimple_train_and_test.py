@@ -19,8 +19,8 @@ scnn = SCNN(image_size=image_size,nc=num_class,net_origin=False)
 scnn.set_generator(train_dataset.BatchGenerator(labels=num_class))
  
 
-scnn.train(epochs=5, steps_per_epoch=250)
-scnn.save(file_path="tusimple_model.h5")
+# scnn.train(epochs=5, steps_per_epoch=250)
+# scnn.save(file_path="tusimple_model.h5")
 
 scnn.load(file_path="tusimple_model.h5")
 start = time.time()
@@ -36,7 +36,7 @@ for flag in range(1):
     print(prediction.shape)
     result = np.argmax(prediction[0,:,:,:],-1)
     plt.subplot(1, 2, 2)
-    plt.imshow(result)
+    plt.imshow(prediction[0,:,:,4])
     plt.pause(0.5)
     # plt.clf()
     plt.show()
